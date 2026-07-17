@@ -93,27 +93,26 @@ def processReset(request):
         with connection.cursor() as cursor:
             with transaction.atomic():
                 # Add the users
-                logger.info("Preparing the Stetement for adding users")
-                usersStatement = "INSERT INTO users (username, password, password_hint, totp_secret, created_at, last_login, real_name, blab_name) values ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');"
+                logger.info("Preparing the Statement for adding users")
+                usersStatement = "INSERT INTO users (username, password, password_hint, totp_secret, created_at, last_login, real_name, blab_name) values (%s, %s, %s, %s, %s, %s, %s, %s);"
                 if users[0].password == "21232f297a57a5a743894a0e4a801fc3":
                     logger.info("Encryption successful!")
                 for user in users:
                     logger.info("Adding user " + user.username)
-                    cursor.execute(usersStatement % (user.username, user.password, user.password_hint, user.totp_secret, user.created_at,
-                                                     user.last_login, user.real_name, user.blab_name))
+                    cursor.execute(usersStatement, [user.username, user.password, user.password_hint, user.totp_secret, user.created_at,
+                                                    user.last_login, user.real_name, user.blab_name])
 
             # Add the listeners
             logger.info("Preparing the Statement for adding listeners")
             with transaction.atomic():
-                listenersStatement = "INSERT INTO listeners (blabber, listener, status) values ('%s', '%s', 'Active');"
+                listenersStatement = "INSERT INTO listeners (blabber, listener, status) values (%s, %s, 'Active');"
                 for blabber in users[2:]:
                     for listener in users[2:]:
                         if rand.choice([False, True]) and (blabber != listener):
-                            
 
                             logger.info("Adding " + listener.username + " as a listener of " + blabber.username)
 
-                            cursor.execute(listenersStatement % (blabber.username, listener.username))    
+                            cursor.execute(listenersStatement, [blabber.username, listener.username])    
 
             # Fetch pre-loaded Blabs
             logger.info("Reading blabs from file")
