@@ -518,9 +518,9 @@ def showProfile(request):
                 events.append(result[0])
 
             # Get the users information
-            sql = "SELECT username, real_name, blab_name, totp_secret FROM users WHERE username = '" + username + "'"
-            logger.info(sql)
-            cursor.execute(sql)
+            sql = "SELECT username, real_name, blab_name, totp_secret FROM users WHERE username = %s"
+            logger.info("SELECT username, real_name, blab_name, totp_secret FROM users WHERE username = [parameterized]")
+            cursor.execute(sql, [username])
             myInfoResults = cursor.fetchone()
             if not myInfoResults:
                 return JsonResponse({'message':'Error, no Inforesults found'})
