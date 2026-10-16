@@ -5,7 +5,7 @@ import sqlite3
 import hashlib
 import smtplib
 import pyotp
-import pickle, base64
+import json, base64
 
 import sqlparse
 from email.mime.multipart import MIMEMultipart
@@ -66,11 +66,11 @@ def login(request):
         else:
             logger.info("User details were remembered")
             decoded = base64.b64decode(userDetailsCookie)
-            unencodedUserDetails = pickle.loads(decoded)
+            userDetailsDict = json.loads(decoded.decode('utf-8'))
 
-            logger.info("User details were retrieved for user: " + unencodedUserDetails.username)
-            
-            request.session['username'] = unencodedUserDetails.username
+            logger.info("User details were retrieved for user: " + userDetailsDict.get('username', ''))
+
+            request.session['username'] = userDetailsDict.get('username', '')
 
             if (target != None) and (target) and (not target == "null"):
                 return redirect(target)
@@ -630,10 +630,9 @@ def processProfile(request):
         userDetailsCookie = request.COOKIES.get('user')
         if userDetailsCookie is not None:
             decoded = base64.b64decode(userDetailsCookie)
-            unencodedUserDetails = pickle.loads(decoded)
-            # unencodedUserDetails = pickle.loads(base64.b64decode(userDetailsCookie))
-            unencodedUserDetails.username = username
-            response = updateInResponse(unencodedUserDetails, response)
+            userDetailsDict = json.loads(decoded.decode('utf-8'))
+            userDetailsDict['username'] = username
+            response = updateInResponse(userDetailsDict, response)
         
 
         # Update user profile image
@@ -673,11 +672,23 @@ def processProfile(request):
     return response
 
 # updates the user cookies
+# Serializes user data as JSON (safe) instead of pickle (unsafe / allows RCE).
 def updateInResponse(user, response):
-    # encoded = base64.b64encode(user)
-    # cookie = pickle.dumps(encoded.decode())
-    pickled = pickle.dumps(user)
-    cookie = base64.b64encode(pickled).decode('ASCII')
+    if hasattr(user, '__dict__'):
+        # Django model instance: extract only the safe scalar fields needed for the cookie
+        user_data = {
+            'username': getattr(user, 'username', ''),
+            'real_name': getattr(user, 'real_name', ''),
+            'blab_name': getattr(user, 'blab_name', ''),
+        }
+    else:
+        # Already a plain dict (e.g. from processProfile deserialization)
+        user_data = {
+            'username': user.get('username', ''),
+            'real_name': user.get('real_name', ''),
+            'blab_name': user.get('blab_name', ''),
+        }
+    cookie = base64.b64encode(json.dumps(user_data).encode('utf-8')).decode('ASCII')
     response.set_cookie('user', cookie)
     return response
 
