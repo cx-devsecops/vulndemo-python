@@ -5,7 +5,7 @@ import sqlite3
 import hashlib
 import smtplib
 import pyotp
-import pickle, base64
+import json, base64
 
 import sqlparse
 from email.mime.multipart import MIMEMultipart
@@ -65,12 +65,23 @@ def login(request):
 
         else:
             logger.info("User details were remembered")
-            decoded = base64.b64decode(userDetailsCookie)
-            unencodedUserDetails = pickle.loads(decoded)
+            # The remember-me cookie is client controlled, so it is parsed as plain JSON
+            # data (never deserialized into arbitrary objects).
+            try:
+                userDetails = json.loads(base64.b64decode(userDetailsCookie))
+                cookieUsername = userDetails.get('username')
+            except (ValueError, AttributeError):
+                cookieUsername = None
 
-            logger.info("User details were retrieved for user: " + unencodedUserDetails.username)
-            
-            request.session['username'] = unencodedUserDetails.username
+            if not isinstance(cookieUsername, str) or not cookieUsername:
+                logger.info("Invalid user cookie - ignoring")
+                response = render(request, 'app/login.html', {})
+                response.delete_cookie('user')
+                return response
+
+            logger.info("User details were retrieved for user: " + cookieUsername)
+
+            request.session['username'] = cookieUsername
 
             if (target != None) and (target) and (not target == "null"):
                 return redirect(target)
@@ -629,11 +640,9 @@ def processProfile(request):
         # Update remember me functionality
         userDetailsCookie = request.COOKIES.get('user')
         if userDetailsCookie is not None:
-            decoded = base64.b64decode(userDetailsCookie)
-            unencodedUserDetails = pickle.loads(decoded)
-            # unencodedUserDetails = pickle.loads(base64.b64decode(userDetailsCookie))
-            unencodedUserDetails.username = username
-            response = updateInResponse(unencodedUserDetails, response)
+            # The cookie only carries the username, so rebuild it rather than
+            # deserializing the client supplied value.
+            response = updateInResponse(User(username=username), response)
         
 
         # Update user profile image
@@ -674,10 +683,9 @@ def processProfile(request):
 
 # updates the user cookies
 def updateInResponse(user, response):
-    # encoded = base64.b64encode(user)
-    # cookie = pickle.dumps(encoded.decode())
-    pickled = pickle.dumps(user)
-    cookie = base64.b64encode(pickled).decode('ASCII')
+    # Only the username is stored, as JSON (a data-only format).
+    details = json.dumps({'username': user.username if user is not None else None})
+    cookie = base64.b64encode(details.encode('utf-8')).decode('ASCII')
     response.set_cookie('user', cookie)
     return response
 
